@@ -3,21 +3,27 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, QTimer, QRectF
+from PySide6.QtCore import Qt, QTimer, QRectF, QPoint
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPen, QBrush
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QMessageBox
 
 
 class ScreenshotDot(QWidget):
-    SIZE = 44
+    SIZE = 28
 
     def __init__(self) -> None:
         super().__init__()
         self._capturing = False
         self._capture_ok = False
+        self._press_global_pos: QPoint | None = None
+        self._window_start_pos: QPoint | None = None
+        self._was_dragged = False
 
         self.setWindowTitle("Screen Dot")
-        self.setToolTip("Бір рет бас — скриншот Clipboard-қа көшіріледі. Қою үшін Ctrl+V.")
+        self.setToolTip(
+            "Сол жақ шерту: скриншот түсіру | "
+            "Басып тұрып сүйреу: орнын ауыстыру | Оң жақ шерту: шығу"
+        )
         self.setWindowFlags(
             Qt.WindowType.Tool
             | Qt.WindowType.FramelessWindowHint
@@ -27,7 +33,7 @@ class ScreenshotDot(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFixedSize(self.SIZE, self.SIZE)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.SizeAllCursor)
 
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
@@ -37,17 +43,48 @@ class ScreenshotDot(QWidget):
     def paintEvent(self, _event) -> None:  # noqa: N802 - Qt override
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = QRectF(2, 2, self.width() - 4, self.height() - 4)
+        rect = QRectF(1.5, 1.5, self.width() - 3, self.height() - 3)
         fill = QColor(20, 115, 55, 250) if self._capture_ok else QColor(15, 15, 15, 248)
-        painter.setPen(QPen(QColor(255, 255, 255, 225), 2))
+        painter.setPen(QPen(QColor(255, 255, 255, 220), 1))
         painter.setBrush(QBrush(fill))
         painter.drawEllipse(rect)
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._press_global_pos = event.globalPosition().toPoint()
+            self._window_start_pos = self.pos()
+            self._was_dragged = False
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if (
+            self._press_global_pos is not None
+            and self._window_start_pos is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            current_pos = event.globalPosition().toPoint()
+            delta = current_pos - self._press_global_pos
+            if delta.manhattanLength() >= 3:
+                self._was_dragged = True
+            if self._was_dragged:
+                self.move(self._window_start_pos + delta)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802 - Qt override
         if event.button() == Qt.MouseButton.LeftButton:
-            self.capture_screen()
-        else:
-            super().mouseReleaseEvent(event)
+            was_dragged = self._was_dragged
+            self._press_global_pos = None
+            self._window_start_pos = None
+            self._was_dragged = False
+            if not was_dragged:
+                self.capture_screen()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802 - Qt override
         menu = QMenu(self)
