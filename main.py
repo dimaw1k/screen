@@ -22,8 +22,10 @@ class ScreenshotDot(QWidget):
             Qt.WindowType.Tool
             | Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFixedSize(self.SIZE, self.SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -90,7 +92,6 @@ class ScreenshotDot(QWidget):
         finally:
             self.show()
             self.raise_()
-            self.activateWindow()
             self.update()
             self._capturing = False
 
